@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>IllmUpdate</title>
+
+    <!-- Load TensorFlow.js and COCO-SSD -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <style>
+  video {
+    transform: scaleX(-1); /* Mirror horizontally */
+  }
+</style>
+
+    <script>
+    let modelPromise;
+
+    // Load TF.js model once the page loads
+    async function loadModel() {
+      modelPromise = cocoSsd.load();
+    }
+
+    // Detect objects from base64 image
+    async function detectObjects(base64Image) {
+      const model = await modelPromise;
+
+      const img = new Image();
+      img.src = base64Image;
+
+      img.onload = async () => {
+        const predictions = await model.detect(img);
+        window.dispatchEvent(new CustomEvent('tf_predictions', {
+          detail: JSON.stringify(predictions)
+        }));
+      };
+    }
+
+    window.addEventListener('load', loadModel);
+  </script>
+</head>
+
+<body>
+<!-- Flutter App Entry Point -->
+<script src="main.dart.js" type="application/javascript"></script>
+
+<!-- Firebase Initialization -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB54e7PAPaGQEmEwDxuuxHS09miTJNzjpM",
+      authDomain: "illmupdate.firebaseapp.com",
+      projectId: "illmupdate",
+      storageBucket: "illmupdate.firebasestorage.app",
+      messagingSenderId: "1019083668709",
+      appId: "1:1019083668709:web:15bcb683c400bae466a80c",
+      measurementId: "G-3F8ZM6W72G"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    window.firebaseApp = app;
+  </script>
+</body>
+</html>
