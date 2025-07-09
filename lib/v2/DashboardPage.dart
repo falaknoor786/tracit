@@ -1,4 +1,3 @@
-// --- DASHBOARD PAGE (MAIN SCREEN) ---
 import 'package:flutter/material.dart';
 
 import '../LiveScannerPage.dart';
@@ -12,131 +11,164 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  int _selectedTab =
-      1; // 0 for Barcode Mode, 1 for Photo Upload (Live Camera Feed)
+  int _selectedTab = 1;
 
-  // Define consistent colors for the entire app based on your app bar
-  static const Color _primaryPurple = Color(0xFF4C2A9A); // Deep purple
-  static const Color _mediumPurple = Color(0xFF8A2BE2); // Medium purple
-  static const Color _accentGreen =
-      Color(0xFF4CAF50); // Standard green for action
+  static const Color _primaryPurple = Color(0xFF4C2A9A);
+  static const Color _mediumPurple = Color(0xFF8A2BE2);
+  static const Color _accentGreen = Color(0xFF4CAF50);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const CustomAppBar(), // Your custom AppBar
-      backgroundColor: const Color(0xFFF0F2F5), // Light grey background
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildTopPreviewHeader(), // Top "Mobile Preview" section
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start, // Align top of columns
+      appBar: const CustomAppBar(),
+      backgroundColor: const Color(0xFFF0F2F5),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          double screenWidth = constraints.maxWidth;
+
+          bool isMobile = screenWidth < 600;
+          bool isTablet = screenWidth >= 600 && screenWidth < 1024;
+          bool isDesktop = screenWidth >= 1024;
+
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                _buildTopPreviewHeader(),
+                Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: isMobile
+                      ? Column(
+                          children: [
+                            _buildLiveScanTab(),
+                            const SizedBox(height: 20),
+                            const PointCalculatorCard(),
+                            const SizedBox(height: 20),
+                            const DetectedItemsSection(),
+                            const SizedBox(height: 24),
+                            _buildModeTabs(),
+                            const SizedBox(height: 20),
+                            _selectedTab == 0
+                                ? _buildBarcodeScannerPlaceholder()
+                                : const LiveCameraFeedCard(),
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                children: [
+                                  _buildLiveScanTab(),
+                                  const SizedBox(height: 20),
+                                  const PointCalculatorCard(),
+                                  const SizedBox(height: 20),
+                                  const DetectedItemsSection(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildModeTabs(),
+                                  const SizedBox(height: 20),
+                                  _selectedTab == 0
+                                      ? _buildBarcodeScannerPlaceholder()
+                                      : const LiveCameraFeedCard(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTopPreviewHeader() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 600;
+
+        return Container(
+          color: Colors.white,
+          padding: EdgeInsets.symmetric(
+            vertical: isWide ? 24.0 : 16.0,
+            horizontal: isWide ? 32.0 : 16.0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  // Left Column: Live Scan, Point Calculator, Detected Items
-                  Expanded(
-                    flex: 2, // Allocate 2 parts of space
-                    child: Column(
-                      children: [
-                        _buildLiveScanTab(), // "Live Scan" header
-                        const SizedBox(height: 20),
-                        const PointCalculatorCard(), // Point Calculator widget
-                        const SizedBox(height: 20),
-                        const DetectedItemsSection(), // Detected Items widget
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 24), // Spacing between columns
-                  // Right Column: Barcode Mode/Photo Upload tabs, Live Camera Feed
-                  Expanded(
-                    flex: 4, // Allocate 4 parts of space (wider)
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Barcode Mode / Photo Upload Tabs
-                        _buildModeTabs(),
-                        const SizedBox(height: 20),
-                        // Conditional content based on selected tab
-                        if (_selectedTab == 0)
-                          _buildBarcodeScannerPlaceholder(), // Placeholder for barcode scanner
-                        if (_selectedTab == 1)
-                          //ObjectDetectionScreen()
-                          const LiveCameraFeedCard(), // Your main Live Camera Feed Card
-                      ],
+                  const Icon(Icons.phone_android,
+                      color: Colors.blueGrey, size: 24),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Tracit.ai Mobile Preview',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.black87,
+                            fontSize: isWide ? 22 : 18,
+                          ),
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- Helper Widgets for DashboardPage ---
-
-  Widget _buildTopPreviewHeader() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.phone_android, color: Colors.blueGrey, size: 24),
-              const SizedBox(width: 8),
-              Text(
-                'Tracit.ai Mobile Preview',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(color: Colors.black87),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  _buildFeatureTag(context, 'Barcode Scanning'),
+                  _buildFeatureTag(context, 'Object Detection'),
+                  _buildFeatureTag(context, 'Firebase Sync'),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildFeatureTag(context, 'Barcode Scanning'),
-              const SizedBox(width: 12),
-              _buildFeatureTag(context, 'Object Detection'),
-              const SizedBox(width: 12),
-              _buildFeatureTag(context, 'Firebase Sync'),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildFeatureTag(BuildContext context, String text) {
+    IconData? icon;
+    switch (text) {
+      case 'Barcode Scanning':
+        icon = Icons.qr_code;
+        break;
+      case 'Object Detection':
+        icon = Icons.visibility;
+        break;
+      case 'Firebase Sync':
+        icon = Icons.cloud;
+        break;
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Use appropriate icons if available, otherwise just text
-          if (text == 'Barcode Scanning')
-            const Icon(Icons.qr_code, size: 16, color: Colors.grey),
-          if (text == 'Object Detection')
-            const Icon(Icons.visibility, size: 16, color: Colors.grey),
-          if (text == 'Firebase Sync')
-            const Icon(Icons.cloud, size: 16, color: Colors.grey),
+          Icon(icon, size: 16, color: Colors.grey),
           const SizedBox(width: 6),
           Text(
             text,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: Colors.black54),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.black54,
+                ),
           ),
         ],
       ),
@@ -251,7 +283,7 @@ class _DashboardPageState extends State<DashboardPage> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        height: 500, // Adjust height as needed
+        height: MediaQuery.of(context).size.height * 0.5,
         width: double.infinity,
         padding: const EdgeInsets.all(24),
         child: Column(

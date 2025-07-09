@@ -55,34 +55,8 @@ class LiveCameraFeedCard extends StatefulWidget {
   _LiveCameraFeedCardState createState() => _LiveCameraFeedCardState();
 }
 
-Future<Map<String, int>> getLabelCountsFromBase64Image(
-    String base64Image) async {
-  final completer = Completer<Map<String, int>>();
-
-  void predictionListener(html.Event event) {
-    final customEvent = event as html.CustomEvent;
-    final List<dynamic> predictionList = jsonDecode(customEvent.detail);
-
-    final labels = predictionList.map((p) => p['class'].toString());
-
-    final labelCounts = <String, int>{};
-
-    for (var label in labels) {
-      labelCounts[label] = (labelCounts[label] ?? 0) + 1;
-    }
-
-    html.window.removeEventListener('tf_predictions', predictionListener);
-    completer.complete(labelCounts);
-  }
-
-  html.window.addEventListener('tf_predictions', predictionListener);
-
-  js.context.callMethod('detectObjects', [base64Image]);
-
-  return completer.future;
-}
-
 class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
+  // Camera state vars
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   bool _isCameraInitialized = false;
@@ -90,11 +64,13 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
   String? _errorMessage;
   Uint8List? _uploadedImageBytes;
 
-  // Define consistent colors from the main DashboardPage
-  static const Color _primaryPurple = Color(0xFF4C2A9A); // Deep purple
-  static const Color _mediumPurple = Color(0xFF8A2BE2); // Medium purple
-  static const Color _accentGreen =
-      Color(0xFF4CAF50); // Standard green for action
+  List<String> labels = [];
+  String base64Image = "";
+  Map<String, int> groupedLabels = {};
+
+  static const Color _primaryPurple = Color(0xFF4C2A9A);
+  static const Color _mediumPurple = Color(0xFF8A2BE2);
+  static const Color _accentGreen = Color(0xFF4CAF50);
 
   @override
   void initState() {
@@ -106,12 +82,10 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
     html.window.addEventListener('tf_predictions', (event) {
       final customEvent = event as html.CustomEvent;
       final List<dynamic> predictionList = jsonDecode(customEvent.detail);
-
       final detectedLabels =
           predictionList.map((p) => p['class'].toString()).toList();
 
       setState(() => labels = detectedLabels);
-
       for (var label in detectedLabels) {
         saveToFirebase(label);
       }
@@ -123,8 +97,6 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
     });
   }
 
-  List<String> labels = [];
-  String base64Image = "";
   Future<void> saveToFirebase(String label) async {
     await FirebaseFirestore.instance.collection('inventory').add({
       'name': label,
@@ -135,24 +107,16 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
 
   Future<void> _initializeCamera() async {
     if (_isProcessing || _isCameraInitialized) return;
-
-    setState(() {
-      _errorMessage = null;
-      _isProcessing = true;
-      _uploadedImageBytes = null;
-    });
+    setState(() => _isProcessing = true);
 
     try {
       _cameras = await availableCameras();
       if (_cameras.isEmpty) {
-        setState(() {
-          _errorMessage = 'No cameras found on this device.';
-          _isProcessing = false;
-        });
+        setState(() => _errorMessage = 'No cameras found.');
         return;
       }
 
-      CameraDescription selectedCamera = _cameras.firstWhere(
+      final selectedCamera = _cameras.firstWhere(
         (camera) => camera.lensDirection == CameraLensDirection.back,
         orElse: () => _cameras.first,
       );
@@ -171,161 +135,82 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
     } catch (e) {
       setState(() {
         _errorMessage = 'Camera Error: $e';
-        _isCameraInitialized = false;
         _isProcessing = false;
       });
-    }
-  }
-
-  Future<void> _takePictureAndProcess() async {
-    if (!_isCameraInitialized ||
-        _cameraController == null ||
-        !_cameraController!.value.isInitialized) {
-      setState(() {
-        _errorMessage = 'Camera not initialized.';
-      });
-      return;
-    }
-    if (_cameraController!.value.isTakingPicture || _isProcessing) return;
-
-    setState(() {
-      _isProcessing = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final XFile imageFile = await _cameraController!.takePicture();
-      final Uint8List bytes = await imageFile.readAsBytes();
-      final String base64Image = base64Encode(bytes);
-      // detectAndShowCounts(base64Image);
-
-      //  Example: Save to Firestore (requires Firebase setup)
-      await FirebaseFirestore.instance.collection('inventory').add({
-        'image': base64Image,
-        'source': 'camera',
-        'timestamp': Timestamp.now(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Image captured & saved to Firestore (example)')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Error capturing image: $e';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
-    }
-  }
-
-  Map<String, int> groupedLabels = {};
-
-  Future<void> _uploadImage() async {
-    if (!kIsWeb) {
-      setState(() {
-        _errorMessage = 'Image upload is only supported on web.';
-      });
-      return;
-    }
-    if (_isProcessing) return;
-
-    setState(() {
-      _isProcessing = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final html.FileUploadInputElement uploadInput =
-          html.FileUploadInputElement()..accept = 'image/*';
-      uploadInput.click();
-
-      final completer = Completer<Uint8List?>();
-      uploadInput.onChange.listen((e) async {
-        final files = uploadInput.files;
-        if (files == null || files.isEmpty) {
-          completer.complete(null); // No file selected
-          return;
-        }
-
-        final file = files[0];
-        final reader = html.FileReader();
-
-        reader.onError.listen((error) {
-          completer.completeError('Failed to read image: $error');
-        });
-
-        reader.onLoadEnd.listen((_) {
-          if (reader.readyState == html.FileReader.DONE) {
-            completer.complete(reader.result as Uint8List);
-          }
-        });
-
-        reader.readAsArrayBuffer(file);
-      });
-
-      final Uint8List? bytes = await completer.future;
-
-      if (bytes != null) {
-        final String base64Image = base64Encode(bytes);
-
-        // Example: Save to Firestore (requires Firebase setup)
-        await FirebaseFirestore.instance.collection('inventory').add({
-          'image': base64Image,
-          'source': 'upload',
-          'timestamp': Timestamp.now(),
-        });
-
-        if (mounted) {
-          setState(() {
-            _uploadedImageBytes = bytes;
-            _errorMessage = null;
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content:
-                    Text('Image uploaded and saved to Firestore (example)!')),
-          );
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Image upload cancelled.';
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Upload error: $e';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
     }
   }
 
   Future<void> _stopCamera() async {
-    if (_cameraController != null) {
-      await _cameraController!.dispose();
-      setState(() {
-        _cameraController = null;
-        _isCameraInitialized = false;
-        _isProcessing = false;
+    await _cameraController?.dispose();
+    setState(() {
+      _cameraController = null;
+      _isCameraInitialized = false;
+    });
+  }
+
+  Future<void> _uploadImage() async {
+    if (!kIsWeb) return;
+    setState(() => _isProcessing = true);
+
+    try {
+      final input = html.FileUploadInputElement()..accept = 'image/*';
+      input.click();
+      final completer = Completer<Uint8List?>();
+
+      input.onChange.listen((_) async {
+        final file = input.files?.first;
+        if (file == null) return completer.complete(null);
+
+        final reader = html.FileReader();
+        reader.readAsArrayBuffer(file);
+        reader.onLoadEnd.listen((_) {
+          completer.complete(reader.result as Uint8List);
+        });
+        reader.onError.listen((e) => completer.completeError('Read error: $e'));
       });
+
+      final bytes = await completer.future;
+      if (bytes != null) {
+        final base64 = base64Encode(bytes);
+        await FirebaseFirestore.instance.collection('inventory').add({
+          'image': base64,
+          'source': 'upload',
+          'timestamp': Timestamp.now(),
+        });
+
+        setState(() => _uploadedImageBytes = bytes);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Image uploaded successfully')),
+        );
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Upload error: $e');
+    } finally {
+      setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _takePictureAndProcess() async {
+    if (!_isCameraInitialized || _cameraController == null) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      final XFile imageFile = await _cameraController!.takePicture();
+      final Uint8List bytes = await imageFile.readAsBytes();
+      final base64 = base64Encode(bytes);
+      await FirebaseFirestore.instance.collection('inventory').add({
+        'image': base64,
+        'source': 'camera',
+        'timestamp': Timestamp.now(),
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Image captured and saved')),
+      );
+    } catch (e) {
+      setState(() => _errorMessage = 'Capture error: $e');
+    } finally {
+      setState(() => _isProcessing = false);
     }
   }
 
@@ -337,94 +222,103 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 8, // Slightly higher elevation for a premium feel
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16)), // More rounded corners
-      // No margin here as it's handled by padding in DashboardPage
-      child: Padding(
-        padding: const EdgeInsets.all(30.0), // Increased inner padding
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 30), // Increased spacing
-            _buildControls(),
-            const SizedBox(height: 30), // Increased spacing
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20), // Adjusted padding
-                child: Text(
-                  _errorMessage!,
-                  style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15),
-                  textAlign: TextAlign.center,
-                ),
+    return SingleChildScrollView(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isSmall = constraints.maxWidth < 600;
+          return Card(
+            elevation: 8,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: EdgeInsets.all(isSmall ? 16 : 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(isSmall),
+                  const SizedBox(height: 20),
+                  _buildControls(isSmall),
+                  const SizedBox(height: 20),
+                  if (_errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(_errorMessage!,
+                          style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
+                    ),
+                  _buildPreview(isSmall),
+                  const SizedBox(height: 20),
+                  _buildScanButton(),
+                ],
               ),
-            _buildPreview(),
-            const SizedBox(height: 30), // Increased spacing
-            _buildScanButton(),
-          ],
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  // --- Helper Widgets for LiveCameraFeedCard ---
-
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Row(
-          children: [
-            Icon(Icons.camera_alt,
-                size: 32, color: _primaryPurple), // Larger icon
-            SizedBox(width: 15), // Increased spacing
-            Text(
-              'Live Camera Feed',
-              style: TextStyle(
-                fontSize: 24, // Larger font
-                fontWeight: FontWeight.bold,
-                color: _primaryPurple, // Consistent color
+  Widget _buildHeader(bool isSmall) {
+    return isSmall
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.camera_alt, size: 28, color: _primaryPurple),
+              const SizedBox(height: 10),
+              const Text('Live Camera Feed',
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: _primaryPurple)),
+              const SizedBox(height: 10),
+              _mlKitBadge(),
+            ],
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.camera_alt, size: 32, color: _primaryPurple),
+                  SizedBox(width: 15),
+                  Text('Live Camera Feed',
+                      style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: _primaryPurple)),
+                ],
               ),
-            ),
-          ],
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 8), // More padding
-          decoration: BoxDecoration(
-            color: _mediumPurple, // Use the medium purple
-            borderRadius: BorderRadius.circular(25), // More rounded
-          ),
-          child: const Text(
-            'Google ML Kit',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 15, // Slightly larger font
-                fontWeight: FontWeight.w600),
-          ),
-        ),
-      ],
-    );
+              _mlKitBadge(),
+            ],
+          );
   }
 
-  Widget _buildControls() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _mlKitBadge() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+            color: _mediumPurple, borderRadius: BorderRadius.circular(25)),
+        child: const Text('Google ML Kit',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600)),
+      );
+
+  Widget _buildControls(bool isSmall) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Controls',
-          style: TextStyle(
-            fontSize: 20, // Larger font
-            fontWeight: FontWeight.w700, // Bolder
-            color: Colors.black87, // Stronger text color
-          ),
-        ),
-        Row(
+        const Text('Controls',
+            style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87)),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
           children: [
             _buildActionButton(
               icon: Icons.videocam,
@@ -434,39 +328,29 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
                   : null,
               isLoading: _isProcessing && !_isCameraInitialized,
             ),
-            const SizedBox(width: 16), // Increased spacing
             _buildActionButton(
               icon: Icons.upload_file,
-              label: 'Upload Image', // Changed label for clarity
+              label: 'Upload Image',
               onPressed: kIsWeb && !_isProcessing ? _uploadImage : null,
               isLoading: _isProcessing && kIsWeb && _cameraController == null,
             ),
           ],
-        ),
+        )
       ],
     );
   }
 
-  Widget _buildPreview() {
+  Widget _buildPreview(bool isSmall) {
+    final previewHeight = isSmall ? 250.0 : 400.0;
+
     return Container(
-      height: 400, // Slightly taller
+      height: previewHeight,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: _primaryPurple
-            .withOpacity(0.9), // Use primary purple with slight opacity
-        borderRadius: BorderRadius.circular(16), // Consistent rounded corners
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            spreadRadius: 2,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: _primaryPurple.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: _isCameraInitialized &&
-              _cameraController != null &&
-              _cameraController!.value.isInitialized
+      child: _isCameraInitialized && _cameraController != null
           ? ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: CameraPreview(_cameraController!),
@@ -474,32 +358,23 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
           : _uploadedImageBytes != null
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.memory(
-                    _uploadedImageBytes!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: 400,
-                  ),
+                  child: Image.memory(_uploadedImageBytes!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: previewHeight),
                 )
               : Center(
                   child: _isProcessing
                       ? const CircularProgressIndicator(color: Colors.white)
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.videocam_off,
-                                size: 70,
-                                color: Colors
-                                    .white60), // Larger icon, slightly less opaque
-                            const SizedBox(height: 20), // Increased spacing
-                            const Text(
-                              'Click Camera to start live feed', // Changed text as per screenshot
-                              style: TextStyle(
-                                  color:
-                                      Colors.white70, // Slightly brighter text
-                                  fontSize: 18), // Larger font
-                            ),
-                            // No "(Web only)" in the screenshot, so removed.
+                          children: const [
+                            Icon(Icons.videocam_off,
+                                size: 70, color: Colors.white60),
+                            SizedBox(height: 20),
+                            Text('Click Camera to start live feed',
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 18)),
                           ],
                         ),
                 ),
@@ -514,34 +389,27 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
             ? _takePictureAndProcess
             : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: _accentGreen, // Consistent green for action
+          backgroundColor: _accentGreen,
           foregroundColor: Colors.white,
-          padding:
-              const EdgeInsets.symmetric(vertical: 18), // More vertical padding
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(35)), // More rounded
-          elevation: 5, // Add some elevation
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(35)),
         ),
         child: _isProcessing && _isCameraInitialized
             ? const SizedBox(
-                width: 28, // Slightly larger spinner
+                width: 28,
                 height: 28,
                 child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 3, // Thicker stroke
-                ),
+                    color: Colors.white, strokeWidth: 3),
               )
             : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.qr_code_scanner,
-                      size: 24), // Changed icon to match "Scan Items"
-                  SizedBox(width: 10), // Increased spacing
+                  Icon(Icons.qr_code_scanner, size: 24),
+                  SizedBox(width: 10),
                   Text('Scan Items',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight:
-                              FontWeight.bold)), // Changed text to "Scan Items"
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 ],
               ),
       ),
@@ -557,33 +425,29 @@ class _LiveCameraFeedCardState extends State<LiveCameraFeedCard> {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 20, vertical: 12), // More padding
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10)), // More rounded
-        side: BorderSide(
-            color: Colors.grey.shade300,
-            width: 1.5), // Lighter, slightly thicker border
-        backgroundColor: Colors.white, // Explicit white background
-        foregroundColor: _primaryPurple, // Text and icon color
-        elevation: 2, // Subtle elevation
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        side: BorderSide(color: Colors.grey.shade300, width: 1.5),
+        backgroundColor: Colors.white,
+        foregroundColor: _primaryPurple,
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           isLoading
               ? const SizedBox(
-                  width: 22, // Slightly larger spinner
+                  width: 22,
                   height: 22,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: _primaryPurple), // Consistent purple
+                      strokeWidth: 2.5, color: _primaryPurple),
                 )
-              : Icon(icon, size: 22, color: _primaryPurple), // Larger icon
-          const SizedBox(width: 10), // Increased spacing
+              : Icon(icon, size: 22, color: _primaryPurple),
+          const SizedBox(width: 10),
           Text(label,
               style: const TextStyle(
                   color: _primaryPurple,
-                  fontSize: 16)), // Consistent font size and color
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );

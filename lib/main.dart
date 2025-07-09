@@ -56,70 +56,61 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 60,
-        backgroundColor: Colors.deepPurple,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Container(
-          color: Colors.deepPurple,
-          child: Row(
-            children: [
-              Spacer(),
-              Text(
-                'Tracit.ai',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-              Spacer(),
-              _buildNavItem(0, Icons.qr_code_scanner, 'Live Scan'),
-              _buildNavItem(1, Icons.inventory_rounded, 'Inventory'),
-              _buildNavItem(2, Icons.shopping_bag_rounded, 'Orders'),
-              _buildNavItem(3, Icons.settings_rounded, 'Admin'),
-              Spacer(),
-            ],
+  final pages = [
+    const LiveCameraFeedCard(),
+    InventoryPage(),
+    OrdersPage(),
+    AdminPage(),
+  ];
+
+  final titles = ["Live Scan", "Inventory", "Orders", "Admin"];
+  final icons = [
+    Icons.qr_code_scanner,
+    Icons.inventory,
+    Icons.shopping_cart,
+    Icons.admin_panel_settings
+  ];
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  Widget _buildWebNavBar() {
+    return AppBar(
+      backgroundColor: Colors.deepPurple,
+      toolbarHeight: 70,
+      title: Row(
+        children: [
+          const Icon(Icons.flash_on, color: Colors.white),
+          const SizedBox(width: 8),
+          const Text(
+            'Tracit.ai',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Container(
-            color: Colors.grey.shade300,
-            height: 1,
-          ),
-        ),
+          const Spacer(),
+          for (int i = 0; i < titles.length; i++)
+            _buildNavItem(i, icons[i], titles[i]),
+          const SizedBox(width: 20),
+        ],
       ),
-      body: _getSelectedPage(),
     );
   }
 
   Widget _buildNavItem(int index, IconData icon, String label) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final isSelected = _selectedIndex == index;
+    return MaterialButton(
+      onPressed: () => _onItemTapped(index),
+      child: Row(
         children: [
-          IconButton(
-            icon: Icon(icon),
-            color:
-                _selectedIndex == index ? Colors.white : Colors.grey.shade400,
-            onPressed: () {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-          ),
+          Icon(icon, color: isSelected ? Colors.white : Colors.white70),
+          const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
-              color:
-                  _selectedIndex == index ? Colors.white : Colors.grey.shade400,
+              color: isSelected ? Colors.white : Colors.white70,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
           ),
         ],
@@ -127,19 +118,51 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _getSelectedPage() {
-    switch (_selectedIndex) {
-      case 0:
-        return LiveCameraFeedCard();
-      case 1:
-        return InventoryPage();
-      case 2:
-        return OrdersPage();
-      case 3:
-        return AdminPage();
-      default:
-        return Center(child: Text("Page not found"));
-    }
+  Widget _buildDrawerItem(int index, IconData icon, String label) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      selected: _selectedIndex == index,
+      onTap: () {
+        Navigator.of(context).pop();
+        _onItemTapped(index);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      bool isMobile = constraints.maxWidth < 600;
+
+      return Scaffold(
+        appBar: isMobile
+            ? AppBar(
+                backgroundColor: Colors.deepPurple,
+                title: const Text('Tracit.ai'),
+              )
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(70),
+                child: _buildWebNavBar(),
+              ),
+        drawer: isMobile
+            ? Drawer(
+                child: ListView(
+                  children: [
+                    const DrawerHeader(
+                      decoration: BoxDecoration(color: Colors.deepPurple),
+                      child:
+                          Text('Menu', style: TextStyle(color: Colors.white)),
+                    ),
+                    for (int i = 0; i < titles.length; i++)
+                      _buildDrawerItem(i, icons[i], titles[i]),
+                  ],
+                ),
+              )
+            : null,
+        body: pages[_selectedIndex],
+      );
+    });
   }
 }
 
