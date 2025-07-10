@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:inventory_management_system/v2/DashboardPage.dart';
 import 'package:inventory_management_system/v2/InventoryDashboardScreen.dart';
 
-import 'LiveScannerPage.dart'; // Make sure this file exists with a widget named LiveScannerPage
+import 'LiveScannerPage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,26 +12,20 @@ void main() async {
   if (kIsWeb) {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
-          // apiKey: "AIzaSyB54e7PAPaGQEmEwDxuuxHS09miTJNzjpM",
-          // authDomain: "illmupdate.firebaseapp.com",
-          // projectId: "illmupdate",
-          // storageBucket: "illmupdate.appspot.com",
-          // messagingSenderId: "1019083668709",
-          // appId: "1:1019083668709:web:15bcb683c400bae466a80c",
-          // measurementId: "G-3F8ZM6W72G",
-          apiKey: "AIzaSyADI41t-ABSpet4t4SV45I2RtKqS4s4qWE",
-          authDomain: "tracit-a57fc.firebaseapp.com",
-          projectId: "tracit-a57fc",
-          storageBucket: "tracit-a57fc.firebasestorage.app",
-          messagingSenderId: "490678157751",
-          appId: "1:490678157751:web:6f2f56c3d8459230596832",
-          measurementId: "G-2Y99D9B5PV"),
+        apiKey: "AIzaSyADI41t-ABSpet4t4SV45I2RtKqS4s4qWE",
+        authDomain: "tracit-a57fc.firebaseapp.com",
+        projectId: "tracit-a57fc",
+        storageBucket: "tracit-a57fc.firebasestorage.app",
+        messagingSenderId: "490678157751",
+        appId: "1:490678157751:web:6f2f56c3d8459230596832",
+        measurementId: "G-2Y99D9B5PV",
+      ),
     );
   } else {
     await Firebase.initializeApp();
   }
 
-  runApp(xMyApp());
+  runApp(TracitApp());
 }
 
 class TracitApp extends StatelessWidget {
@@ -41,8 +35,11 @@ class TracitApp extends StatelessWidget {
       title: 'Tracit.ai',
       theme: ThemeData(
         scaffoldBackgroundColor: Colors.white,
+        primarySwatch: Colors.deepPurple,
       ),
-      home: MainScreen(),
+      // home: MainScreen(),
+      home: DashboardPage(),
+      //  home: ObjectDetectionApp(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -56,19 +53,19 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  final pages = [
-    const LiveCameraFeedCard(),
-    InventoryPage(),
+  final List<Widget> pages = [
+    LiveCameraFeedCard(),
+    InventoryDashboardScreen(),
     OrdersPage(),
     AdminPage(),
   ];
 
-  final titles = ["Live Scan", "Inventory", "Orders", "Admin"];
-  final icons = [
+  final List<String> titles = ["Live Scan", "Inventory", "Orders", "Admin"];
+  final List<IconData> icons = [
     Icons.qr_code_scanner,
     Icons.inventory,
     Icons.shopping_cart,
-    Icons.admin_panel_settings
+    Icons.admin_panel_settings,
   ];
 
   void _onItemTapped(int index) {
@@ -85,14 +82,33 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           const Icon(Icons.flash_on, color: Colors.white),
           const SizedBox(width: 8),
-          const Text(
-            'Tracit.ai',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => DashboardPage()),
+              );
+            },
+            child: const Text(
+              'Tracit.ai',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
           ),
           const Spacer(),
           for (int i = 0; i < titles.length; i++)
             _buildNavItem(i, icons[i], titles[i]),
           const SizedBox(width: 20),
+          _buildLoginSignupButton(),
+          const SizedBox(width: 12),
+          const CircleAvatar(
+            backgroundColor: Colors.white,
+            radius: 18,
+            child: Icon(Icons.person, color: Colors.deepPurple, size: 20),
+          ),
         ],
       ),
     );
@@ -101,6 +117,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _selectedIndex == index;
     return MaterialButton(
+      minWidth: 0,
       onPressed: () => _onItemTapped(index),
       child: Row(
         children: [
@@ -118,10 +135,42 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Widget _buildLoginSignupButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+      ),
+      child: MaterialButton(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        onPressed: () {
+          // Handle login/signup
+        },
+        child: const Text(
+          'Login / Signup',
+          style: TextStyle(
+            color: Colors.deepPurple,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDrawerItem(int index, IconData icon, String label) {
     return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
+      leading: Icon(icon,
+          color:
+              _selectedIndex == index ? Colors.deepPurple : Colors.grey[700]),
+      title: Text(
+        label,
+        style: TextStyle(
+          color: _selectedIndex == index ? Colors.deepPurple : Colors.grey[700],
+          fontWeight:
+              _selectedIndex == index ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
       selected: _selectedIndex == index,
       onTap: () {
         Navigator.of(context).pop();
@@ -130,61 +179,102 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Widget _buildMobileBottomNavBar() {
+    return BottomNavigationBar(
+      items: [
+        for (int i = 0; i < titles.length; i++)
+          BottomNavigationBarItem(
+            icon: Icon(icons[i]),
+            label: titles[i],
+          ),
+      ],
+      currentIndex: _selectedIndex,
+      selectedItemColor: Colors.deepPurple,
+      unselectedItemColor: Colors.grey,
+      onTap: _onItemTapped,
+      type: BottomNavigationBarType.fixed,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      bool isMobile = constraints.maxWidth < 600;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        bool isMobile = constraints.maxWidth < 800;
 
-      return Scaffold(
-        appBar: isMobile
-            ? AppBar(
-                backgroundColor: Colors.deepPurple,
-                title: const Text('Tracit.ai'),
-              )
-            : PreferredSize(
-                preferredSize: const Size.fromHeight(70),
-                child: _buildWebNavBar(),
-              ),
-        drawer: isMobile
-            ? Drawer(
-                child: ListView(
-                  children: [
-                    const DrawerHeader(
-                      decoration: BoxDecoration(color: Colors.deepPurple),
-                      child:
-                          Text('Menu', style: TextStyle(color: Colors.white)),
-                    ),
-                    for (int i = 0; i < titles.length; i++)
-                      _buildDrawerItem(i, icons[i], titles[i]),
-                  ],
+        return Scaffold(
+          appBar: isMobile
+              ? AppBar(
+                  backgroundColor: Colors.deepPurple,
+                  title: const Text(
+                    'Tracit.ai',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  centerTitle: true,
+                )
+              : PreferredSize(
+                  preferredSize: const Size.fromHeight(70),
+                  child: _buildWebNavBar(),
                 ),
-              )
-            : null,
-        body: pages[_selectedIndex],
-      );
-    });
+          drawer: isMobile
+              ? Drawer(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      DrawerHeader(
+                        decoration: const BoxDecoration(
+                          color: Colors.deepPurple,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.flash_on, color: Colors.white, size: 40),
+                            SizedBox(height: 10),
+                            Text(
+                              'Tracit.ai',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      for (int i = 0; i < titles.length; i++)
+                        _buildDrawerItem(i, icons[i], titles[i]),
+                      const Divider(),
+                      ListTile(
+                        leading: const Icon(Icons.login),
+                        title: const Text('Login / Signup'),
+                        onTap: () {
+                          // Handle login/signup
+                        },
+                      ),
+                    ],
+                  ),
+                )
+              : null,
+          body: pages[_selectedIndex],
+          bottomNavigationBar: isMobile ? _buildMobileBottomNavBar() : null,
+        );
+      },
+    );
   }
 }
 
 // Placeholder pages (replace with your actual pages)
-class InventoryPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Text("Inventory Page"));
-  }
-}
-
 class OrdersPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(child: Text("Orders Page"));
+    return const Center(child: Text("Orders Page"));
   }
 }
 
 class AdminPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(child: Text("Admin Page"));
+    return const Center(child: Text("Admin Page"));
   }
 }
 
@@ -192,114 +282,128 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   const CustomAppBar({super.key});
 
   @override
-  Size get preferredSize =>
-      const Size.fromHeight(kToolbarHeight); // Standard app bar height
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: const Color(0xFF4C2A9A), // Deep purple from the image
-      elevation: 0, // No shadow for a flat design
-      titleSpacing: 0, // Remove default title spacing
+    final isMobile = MediaQuery.of(context).size.width < 800;
 
-      title: Row(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 16.0),
-            child: Row(
+    return AppBar(
+      backgroundColor: const Color(0xFF4C2A9A),
+      elevation: 0,
+      titleSpacing: 0,
+      title: isMobile
+          ? Row(
               children: [
-                const Icon(Icons.flash_on,
-                    color: Colors.white, size: 28), // Lightning bolt icon
+                const Icon(Icons.flash_on, color: Colors.white, size: 28),
                 const SizedBox(width: 8),
-                InkWell(
-                  child: const Text(
-                    'Tracit.ai',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
+                const Text(
+                  'Tracit.ai',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                   ),
-                  onTap: () {
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () {
+                    Scaffold.of(context).openDrawer();
+                  },
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 16.0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.flash_on, color: Colors.white, size: 28),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        child: const Text(
+                          'Tracit.ai',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                _buildAppBarButton(
+                  context: context,
+                  icon: Icons.flash_on,
+                  label: 'Live Scan',
+                  isPrimary: true,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => ObjectDetectionScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(width: 20),
+                _buildAppBarTextButton(
+                  context: context,
+                  icon: Icons.inventory,
+                  label: 'Inventory',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => InventoryDashboardScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(width: 20),
+                _buildAppBarTextButton(
+                  context: context,
+                  icon: Icons.shopping_cart,
+                  label: 'Orders',
+                  onPressed: () {
+                    print('Orders pressed');
+                  },
+                ),
+                const SizedBox(width: 20),
+                _buildAppBarTextButton(
+                  context: context,
+                  icon: Icons.admin_panel_settings,
+                  label: 'Admin',
+                  onPressed: () {
+                    print('Admin pressed');
+                  },
+                ),
+                const SizedBox(width: 20),
+                _buildLoginSignupButton(
+                  context: context,
+                  onPressed: () {
+                    print('Login / Signup pressed');
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => DashboardPage()),
                     );
                   },
                 ),
+                const SizedBox(width: 12),
+                const Padding(
+                  padding: EdgeInsets.only(right: 16.0),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.white,
+                    radius: 18,
+                    child:
+                        Icon(Icons.person, color: Colors.deepPurple, size: 24),
+                  ),
+                ),
               ],
             ),
-          ),
-          const Spacer(), // Pushes elements to the right
-          _buildAppBarButton(
-            context: context,
-            icon: Icons.flash_on, // Example icon, could be camera
-            label: 'Live Scan',
-            isPrimary: true,
-            onPressed: () {
-              // TODO: Navigate to Live Scan page
-
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => ObjectDetectionScreen()),
-              );
-            },
-          ),
-          const SizedBox(width: 20),
-          _buildAppBarTextButton(
-            context: context,
-            icon: Icons.inventory,
-            label: 'Inventory',
-            onPressed: () {
-              // TODO: Navigate to Inventory page
-              print('Inventory pressed');
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => InventoryDashboardScreen()),
-              );
-            },
-          ),
-          const SizedBox(width: 20),
-          _buildAppBarTextButton(
-            context: context,
-            icon: Icons.shopping_cart,
-            label: 'Orders',
-            onPressed: () {
-              // TODO: Navigate to Orders page
-              print('Orders pressed');
-            },
-          ),
-          const SizedBox(width: 20),
-          _buildAppBarTextButton(
-            context: context,
-            icon: Icons.admin_panel_settings,
-            label: 'Admin',
-            onPressed: () {
-              // TODO: Navigate to Admin page
-              print('Admin pressed');
-            },
-          ),
-          const SizedBox(width: 20),
-          _buildLoginSignupButton(
-            context: context,
-            onPressed: () {
-              // TODO: Handle Login/Signup
-              print('Login / Signup pressed');
-            },
-          ),
-          const SizedBox(width: 12),
-          const Padding(
-            padding: EdgeInsets.only(right: 16.0),
-            child: CircleAvatar(
-              backgroundColor: Colors.white, // Or a specific color for the icon
-              radius: 18,
-              child: Icon(Icons.person, color: Colors.deepPurple, size: 24),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -312,13 +416,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: isPrimary
-            ? const Color(0xFF8A2BE2)
-            : Colors.transparent, // Purple background for primary
+        color: isPrimary ? const Color(0xFF8A2BE2) : Colors.transparent,
         borderRadius: BorderRadius.circular(25),
-        border: isPrimary
-            ? null
-            : Border.all(color: Colors.transparent), // No border for primary
+        border: isPrimary ? null : Border.all(color: Colors.transparent),
       ),
       child: MaterialButton(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -385,7 +485,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         child: const Text(
           'Login / Signup',
           style: TextStyle(
-            color: Color(0xFF4C2A9A), // Text color same as app bar background
+            color: Color(0xFF4C2A9A),
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
